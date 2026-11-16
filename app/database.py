@@ -1,32 +1,53 @@
-from collections.abc import Generator
+from collections.abc import Iterator
+from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy import MetaData, create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_URL = "sqlite:///./daylight.db"
+DATABASE_URL = "postgresql+psycopg://toystack@localhost:5432/daylight"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
-
-
-@event.listens_for(engine, "connect")
-def enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
-    previous_autocommit = dbapi_connection.autocommit
-    dbapi_connection.autocommit = True
-
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
-
-    dbapi_connection.autocommit = previous_autocommit
+# Stable constraint names so Alembic autogenerate and later migrations don't break.
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def get_db() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        yield session
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=1800,
+)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    expire_on_commit=False,
+)
+
+
+def get_db() -> Iterator[Session]:
+    """Request-scoped session for FastAPI: db: Session = Depends(get_db)."""
+    with SessionLocal() as db:
+        yield db
+
+
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Commit-or-rollback block for scripts and background jobs."""
+    with SessionLocal() as db:
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
