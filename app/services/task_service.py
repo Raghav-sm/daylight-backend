@@ -9,9 +9,9 @@ from app.schemas.task import TaskCreate, TaskSummary, TaskUpdate
 
 
 def _find_stage(project: Project, *, completed: bool) -> Stage | None:
-    target_name = "completed" if completed else "to do"
+    target_id = project.final_stage_id if completed else project.initial_stage_id
     return next(
-        (stage for stage in project.stages if stage.name.casefold() == target_name),
+        (stage for stage in project.stages if stage.id == target_id),
         project.stages[0] if project.stages else None,
     )
 
@@ -24,20 +24,16 @@ def _apply_completion_timestamp(task: Task) -> None:
         task.completed_at = None
 
 
-def create_task(db: Session, project_id: str, task_data: TaskCreate):
-    project = db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Ensure stages are loaded for named-stage lookup.
+def create_task(db: Session, project_id: str, owner_id: str, task_data: TaskCreate):
     project = (
         db.scalars(
             select(Project)
             .options(selectinload(Project.stages))
-            .where(Project.id == project_id)
+            .where(Project.id == project_id, Project.owner_id == owner_id)
         ).first()
     )
-    assert project is not None
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     stage = None
     if task_data.stage_id is not None:
@@ -47,7 +43,7 @@ def create_task(db: Session, project_id: str, task_data: TaskCreate):
     else:
         stage = _find_stage(project, completed=False)
 
-    completed = bool(stage and stage.name.casefold() == "completed")
+    completed = bool(stage and stage.id == project.final_stage_id)
 
     task = Task(
         project_id=project_id,
@@ -63,16 +59,22 @@ def create_task(db: Session, project_id: str, task_data: TaskCreate):
     db.add(task)
     db.commit()
     db.refresh(task)
-    return get_task(db, task.id)
+    return get_task(db, task.id, owner_id)
 
 
-def get_tasks(db: Session):
-    statement = select(Task).options(selectinload(Task.subtasks)).order_by(Task.created_at.desc())
+def get_tasks(db: Session, owner_id: str):
+    statement = (
+        select(Task)
+        .join(Project, Task.project_id == Project.id)
+        .options(selectinload(Task.subtasks))
+        .where(Project.owner_id == owner_id)
+        .order_by(Task.created_at.desc())
+    )
     return db.scalars(statement).all()
 
 
-def get_project_tasks(db: Session, project_id: str):
-    if db.get(Project, project_id) is None:
+def get_project_tasks(db: Session, project_id: str, owner_id: str):
+    if db.scalar(select(Project.id).where(Project.id == project_id, Project.owner_id == owner_id)) is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     statement = (
@@ -84,8 +86,8 @@ def get_project_tasks(db: Session, project_id: str):
     return db.scalars(statement).all()
 
 
-def get_project_task_summaries(db: Session, project_id: str) -> list[TaskSummary]:
-    if db.get(Project, project_id) is None:
+def get_project_task_summaries(db: Session, project_id: str, owner_id: str) -> list[TaskSummary]:
+    if db.scalar(select(Project.id).where(Project.id == project_id, Project.owner_id == owner_id)) is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     subtask_counts = (
@@ -112,7 +114,8 @@ def get_project_task_summaries(db: Session, project_id: str) -> list[TaskSummary
             func.coalesce(subtask_counts.c.completed_subtask_count, 0),
         )
         .outerjoin(subtask_counts, subtask_counts.c.task_id == Task.id)
-        .where(Task.project_id == project_id)
+        .join(Project, Task.project_id == Project.id)
+        .where(Task.project_id == project_id, Project.owner_id == owner_id)
         .order_by(Task.created_at.desc())
     )
 
@@ -133,11 +136,12 @@ def get_project_task_summaries(db: Session, project_id: str) -> list[TaskSummary
     ]
 
 
-def get_task(db: Session, task_id: str):
+def get_task(db: Session, task_id: str, owner_id: str):
     statement = (
         select(Task)
         .options(selectinload(Task.subtasks))
-        .where(Task.id == task_id)
+        .join(Project, Task.project_id == Project.id)
+        .where(Task.id == task_id, Project.owner_id == owner_id)
     )
     task = db.scalar(statement)
     if task is not None:
@@ -196,8 +200,8 @@ def _replace_subtasks(db: Session, task: Task, submitted_subtasks: list[dict]):
     task.subtasks = updated_subtasks
 
 
-def update_task(db: Session, task_id: str, task_updates: TaskUpdate):
-    task = get_task(db, task_id)
+def update_task(db: Session, task_id: str, owner_id: str, task_updates: TaskUpdate):
+    task = get_task(db, task_id, owner_id)
     changes = task_updates.model_dump(exclude_unset=True)
     fields_set = task_updates.model_fields_set
     subtasks_data = changes.pop("subtasks", None)
@@ -210,7 +214,7 @@ def update_task(db: Session, task_id: str, task_updates: TaskUpdate):
     project = db.scalars(
         select(Project)
         .options(selectinload(Project.stages))
-        .where(Project.id == new_project_id)
+        .where(Project.id == new_project_id, Project.owner_id == owner_id)
     ).first()
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -218,7 +222,7 @@ def update_task(db: Session, task_id: str, task_updates: TaskUpdate):
     if stage_was_sent and completed_was_sent and requested_stage_id is not None:
         stage = db.get(Stage, requested_stage_id)
         if stage is not None and stage.project_id == new_project_id:
-            stage_implies_completed = stage.name.casefold() == "completed"
+            stage_implies_completed = stage.id == project.final_stage_id
             if stage_implies_completed != changes["completed"]:
                 raise HTTPException(
                     status_code=422,
@@ -253,7 +257,7 @@ def update_task(db: Session, task_id: str, task_updates: TaskUpdate):
         if stage is None or stage.project_id != new_project_id:
             raise HTTPException(status_code=422, detail="Stage does not belong to this project")
         task.stage_id = stage.id
-        task.completed = stage.name.casefold() == "completed"
+        task.completed = stage.id == project.final_stage_id
     elif stage_was_sent:
         task.stage_id = None
         if completed_was_sent:
@@ -276,10 +280,10 @@ def update_task(db: Session, task_id: str, task_updates: TaskUpdate):
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Could not save task") from None
-    return get_task(db, task.id)
+    return get_task(db, task.id, owner_id)
 
 
-def delete_task(db: Session, task_id: str):
-    task = get_task(db, task_id)
+def delete_task(db: Session, task_id: str, owner_id: str):
+    task = get_task(db, task_id, owner_id)
     db.delete(task)
     db.commit()

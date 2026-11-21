@@ -40,5 +40,17 @@ def client(db_engine):
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
     with TestClient(fastapi_app) as test_client:
+        registration = test_client.post(
+            "/auth/register",
+            headers={"Origin": "http://localhost:3000"},
+            json={"name": "Test User", "email": "test@example.com", "password": "test-password-1234"},
+        )
+        assert registration.status_code == 201
+        test_client.headers.update(
+            {
+                "Origin": "http://localhost:3000",
+                "X-CSRF-Token": registration.json()["csrfToken"],
+            }
+        )
         yield test_client
     fastapi_app.dependency_overrides.clear()

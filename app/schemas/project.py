@@ -38,6 +38,8 @@ class ProjectCreate(APIModel):
 class ProjectUpdate(APIModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     color: str | None = Field(default=None, min_length=1, max_length=50)
+    initial_stage_id: str | None = None
+    final_stage_id: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -54,7 +56,13 @@ class ProjectRead(APIModel):
     id: str
     name: str
     color: str
+    initial_stage_id: str | None
+    final_stage_id: str | None
     stages: list[StageRead]
+
+
+class StageOrderUpdate(APIModel):
+    stage_ids: list[str]
 
 
 class ProjectSummary(APIModel):

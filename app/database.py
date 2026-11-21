@@ -1,10 +1,14 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+import os
 
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_URL = "postgresql+psycopg://toystack@localhost:5432/daylight"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+psycopg://toystack@localhost:5432/daylight",
+)
 
 # Stable constraint names so Alembic autogenerate and later migrations don't break.
 NAMING_CONVENTION = {

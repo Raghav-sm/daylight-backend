@@ -1,19 +1,30 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 
-from app.api import projects, tasks
+from app.api import auth, projects, tasks
+from app.config import FRONTEND_ORIGINS
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=list(FRONTEND_ORIGINS),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
+app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
+
+
+@app.middleware("http")
+async def prevent_auth_response_caching(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    if request.url.path.startswith("/auth/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/health")

@@ -111,7 +111,7 @@ def test_subtask_ownership_and_duplicates_rejected(client):
     assert duplicate.status_code == 422
 
 
-def test_complete_uses_named_completed_not_last_stage(client):
+def test_complete_uses_designated_final_stage_not_last_stage(client):
     project = client.post("/projects", json={"name": "Custom order", "color": "blue"}).json()
     completed = next(stage for stage in project["stages"] if stage["name"] == "Completed")
     todo = next(stage for stage in project["stages"] if stage["name"] == "To Do")
@@ -135,6 +135,49 @@ def test_complete_uses_named_completed_not_last_stage(client):
     assert reopened["completed"] is False
     assert reopened["completedAt"] is None
     assert reopened["stageId"] == todo["id"]
+
+
+def test_stage_roles_and_order_are_independent(client):
+    project = client.post("/projects", json={"name": "Workflow", "color": "blue"}).json()
+    todo, progress, done = (stage["id"] for stage in project["stages"])
+    review = client.post(
+        f"/projects/{project['id']}/stages", json={"name": "Review", "color": "violet"}
+    ).json()["id"]
+    assert client.get(f"/projects/{project['id']}").json()["stages"][-1]["id"] == review
+
+    task = client.post(f"/projects/{project['id']}/tasks", json={"title": "Card", "stageId": done}).json()
+    assert task["completed"] is True
+    changed = client.patch(
+        f"/projects/{project['id']}", json={"initialStageId": progress, "finalStageId": review}
+    ).json()
+    assert changed["initialStageId"] == progress
+    assert changed["finalStageId"] == review
+    assert client.get(f"/tasks/{task['id']}").json()["completed"] is False
+
+    moved = client.patch(f"/tasks/{task['id']}", json={"stageId": review}).json()
+    assert moved["completed"] is True
+    assert client.post(f"/projects/{project['id']}/tasks", json={"title": "New"}).json()["stageId"] == progress
+
+    order = [review, todo, done, progress]
+    preflight = client.options(
+        f"/projects/{project['id']}/stages/order",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "content-type,x-csrf-token",
+        },
+    )
+    assert preflight.status_code == 200
+    assert "PUT" in preflight.headers.get("access-control-allow-methods", "")
+
+    reordered = client.put(f"/projects/{project['id']}/stages/order", json={"stageIds": order}).json()
+    assert [stage["id"] for stage in reordered["stages"]] == order
+    assert reordered["finalStageId"] == review
+
+    swapped = client.patch(f"/projects/{project['id']}", json={"initialStageId": review}).json()
+    assert swapped["initialStageId"] == review
+    assert swapped["finalStageId"] == progress
+    assert client.get(f"/tasks/{task['id']}").json()["completed"] is False
 
 
 def test_project_transfer_omitting_stage_assigns_destination(client):
