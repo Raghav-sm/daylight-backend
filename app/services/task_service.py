@@ -280,6 +280,7 @@ def update_task(db: Session, task_id: str, owner_id: str, task_updates: TaskUpda
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Could not save task") from None
+    db.expire(task, ["stage"])
     return get_task(db, task.id, owner_id)
 
 

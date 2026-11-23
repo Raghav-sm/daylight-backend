@@ -23,6 +23,9 @@ class User(Base):
     )
 
     projects: Mapped[list["Project"]] = relationship(back_populates="owner")
+    assistant_conversations: Mapped[list["AssistantConversation"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
     sessions: Mapped[list["AuthSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

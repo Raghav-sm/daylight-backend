@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
-from app.api import auth, projects, tasks
+from app.api import assistant, auth, projects, tasks
 from app.config import FRONTEND_ORIGINS
 
 app = FastAPI()
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
+app.include_router(assistant.router)
 
 
 @app.middleware("http")
