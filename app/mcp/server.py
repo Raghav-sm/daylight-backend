@@ -1,7 +1,7 @@
 from fastmcp import FastMCP
 from fastmcp.server.auth import RemoteAuthProvider
 from fastmcp.server.dependencies import get_access_token
-from sqlalchemy.orm import Session
+from mcp.types import Icon
 
 from app.assistant.actions import (
     create_task_action,
@@ -9,7 +9,7 @@ from app.assistant.actions import (
     list_projects_action,
     move_task_action,
 )
-from app.config import BACKEND_PUBLIC_URL
+from app.config import BACKEND_PUBLIC_URL, FRONTEND_PUBLIC_URL
 from app.database import SessionLocal
 from app.mcp.auth import DaylightTokenVerifier
 
@@ -20,7 +20,16 @@ auth = RemoteAuthProvider(
     base_url=BACKEND_PUBLIC_URL,
     scopes_supported=["daylight:read", "daylight:write"],
 )
-mcp = FastMCP("Daylight", instructions="Manage the signed-in user's Daylight projects and tasks.", auth=auth)
+mcp = FastMCP(
+    "Daylight",
+    instructions="Manage the signed-in user's Daylight projects and tasks.",
+    website_url=FRONTEND_PUBLIC_URL,
+    icons=[
+        Icon(src=f"{BACKEND_PUBLIC_URL}/icon.png", mimeType="image/png", sizes=["180x180"]),
+        Icon(src=f"{BACKEND_PUBLIC_URL}/icon.svg", mimeType="image/svg+xml", sizes=["any"]),
+    ],
+    auth=auth,
+)
 
 
 def _identity(required_scope: str) -> str:

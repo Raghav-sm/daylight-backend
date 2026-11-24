@@ -1,13 +1,16 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from starlette.responses import Response
 
 from app.api import assistant, auth, google_auth, oauth, projects, tasks
 from app.config import FRONTEND_ORIGINS
 from app.mcp.server import mcp
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 mcp_app = mcp.http_app(path="/mcp")
 
 
@@ -50,6 +53,33 @@ def health_check():
 @app.get("/")
 def root():
     return {"message": "Hello World"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(
+        STATIC_DIR / "favicon.ico",
+        media_type="image/x-icon",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/icon.svg", include_in_schema=False)
+def icon_svg():
+    return FileResponse(
+        STATIC_DIR / "icon.svg",
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/icon.png", include_in_schema=False)
+def icon_png():
+    return FileResponse(
+        STATIC_DIR / "icon.png",
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # Keep this catch-all mount last so ordinary FastAPI routes remain reachable.

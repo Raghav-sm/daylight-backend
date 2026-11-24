@@ -66,7 +66,25 @@ def test_consent_uses_this_browsers_session(client, db_engine):
     response = client.get(f"/oauth/continue?request={handle}")
     assert response.status_code == 200
     assert f'value="{client.headers["X-CSRF-Token"]}"' in response.text
+    assert "Connect Claude to Daylight?" in response.text
+    assert "Read projects and tasks" in response.text
     assert "form-action 'self' https://claude.ai;" in response.headers["content-security-policy"]
+
+
+def test_mcp_server_exposes_icons_and_favicon(client):
+    from app.mcp.server import mcp
+
+    assert mcp.icons
+    assert any(icon.src.endswith("/icon.png") for icon in mcp.icons)
+    assert any(icon.src.endswith("/icon.svg") for icon in mcp.icons)
+
+    assert client.get("/favicon.ico").status_code == 200
+    svg = client.get("/icon.svg")
+    assert svg.status_code == 200
+    assert "image/svg+xml" in svg.headers["content-type"]
+    png = client.get("/icon.png")
+    assert png.status_code == 200
+    assert "image/png" in png.headers["content-type"]
 
 
 def test_google_continuation_requires_existing_browser_bound_request(client):

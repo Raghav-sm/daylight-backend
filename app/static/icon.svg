@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46" fill="none">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #F3ECDD; }
+      .sun { fill: #F0B04F; }
+    }
+  </style>
+  <rect class="ink" x="6.975" y="0" width="9.05" height="46" fill="#2B2B2B" />
+  <path class="sun" d="M 16.025 0 A 23 23 0 0 1 16.025 46 L 16.025 0 Z" fill="#E9A23B" />
+</svg>

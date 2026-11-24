@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import base64
-import html
 import hashlib
 import ipaddress
 import secrets
@@ -17,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.security.dependencies import get_current_user, require_csrf
 
+from app.api.oauth_consent_page import render_consent_page
 from app.config import BACKEND_PUBLIC_URL, FRONTEND_PUBLIC_URL, SESSION_COOKIE_NAME
 from app.database import get_db
 from app.models import (
@@ -151,7 +151,6 @@ def continue_authorization(request: Request, request_handle: str = Query(alias="
     user = _active_user(request, db)
     if user is None:
         return RedirectResponse(f"{FRONTEND_PUBLIC_URL}/login?oauth_continue={request_handle}", status_code=303)
-    scopes = " and ".join("read your projects and tasks" if s == "daylight:read" else "create and move tasks" for s in row.scopes)
     session = db.scalar(select(AuthSession).where(
         AuthSession.token_hash == digest_token(request.cookies.get(SESSION_COOKIE_NAME, "")),
         AuthSession.expires_at > _now(),
@@ -167,14 +166,23 @@ def continue_authorization(request: Request, request_handle: str = Query(alias="
         if redirect_origin and not any(ch.isspace() or ch == ";" for ch in redirect_origin)
         else "'self'"
     )
-    body = f'''<!doctype html><title>Connect Daylight</title><main style="font:16px system-ui;max-width:520px;margin:10vh auto;padding:24px"><h1>Connect {html.escape(row.client_name)} to Daylight?</h1><p>Signed in as <b>{html.escape(user.email)}</b>.</p><p>This connector can {html.escape(scopes)}.</p><form method="post" action="/oauth/authorize/decision"><input type="hidden" name="request" value="{html.escape(request_handle, quote=True)}"><input type="hidden" name="csrf" value="{html.escape(session.csrf_token if session else '', quote=True)}"><button name="decision" value="approve">Approve</button> <button name="decision" value="deny">Deny</button></form></main>'''
+    body = render_consent_page(
+        client_name=row.client_name,
+        client_id=row.client_id,
+        redirect_uri=row.redirect_uri,
+        user_name=user.name,
+        user_email=user.email,
+        scopes=list(row.scopes),
+        request_handle=request_handle,
+        csrf_token=session.csrf_token if session else "",
+    )
     return HTMLResponse(
         body,
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": (
-                f"default-src 'none'; style-src 'unsafe-inline'; form-action {form_action}; "
-                "base-uri 'none'; frame-ancestors 'none'"
+                f"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; "
+                f"form-action {form_action}; base-uri 'none'; frame-ancestors 'none'"
             ),
         },
     )
