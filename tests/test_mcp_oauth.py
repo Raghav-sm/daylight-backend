@@ -66,6 +66,7 @@ def test_consent_uses_this_browsers_session(client, db_engine):
     response = client.get(f"/oauth/continue?request={handle}")
     assert response.status_code == 200
     assert f'value="{client.headers["X-CSRF-Token"]}"' in response.text
+    assert "form-action 'self' https://claude.ai;" in response.headers["content-security-policy"]
 
 
 def test_google_continuation_requires_existing_browser_bound_request(client):

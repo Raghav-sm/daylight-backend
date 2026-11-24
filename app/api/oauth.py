@@ -156,8 +156,28 @@ def continue_authorization(request: Request, request_handle: str = Query(alias="
         AuthSession.token_hash == digest_token(request.cookies.get(SESSION_COOKIE_NAME, "")),
         AuthSession.expires_at > _now(),
     ))
+    parsed_redirect = urlparse(row.redirect_uri)
+    redirect_origin = (
+        f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+        if parsed_redirect.scheme and parsed_redirect.netloc
+        else ""
+    )
+    form_action = (
+        f"'self' {redirect_origin}"
+        if redirect_origin and not any(ch.isspace() or ch == ";" for ch in redirect_origin)
+        else "'self'"
+    )
     body = f'''<!doctype html><title>Connect Daylight</title><main style="font:16px system-ui;max-width:520px;margin:10vh auto;padding:24px"><h1>Connect {html.escape(row.client_name)} to Daylight?</h1><p>Signed in as <b>{html.escape(user.email)}</b>.</p><p>This connector can {html.escape(scopes)}.</p><form method="post" action="/oauth/authorize/decision"><input type="hidden" name="request" value="{html.escape(request_handle, quote=True)}"><input type="hidden" name="csrf" value="{html.escape(session.csrf_token if session else '', quote=True)}"><button name="decision" value="approve">Approve</button> <button name="decision" value="deny">Deny</button></form></main>'''
-    return HTMLResponse(body, headers={"Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"})
+    return HTMLResponse(
+        body,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": (
+                f"default-src 'none'; style-src 'unsafe-inline'; form-action {form_action}; "
+                "base-uri 'none'; frame-ancestors 'none'"
+            ),
+        },
+    )
 
 
 @router.post("/oauth/authorize/decision")
