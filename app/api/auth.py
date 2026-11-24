@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.config import SESSION_COOKIE_NAME, SESSION_COOKIE_SECURE
+from app.config import SESSION_COOKIE_NAME, SESSION_COOKIE_SAMESITE, SESSION_COOKIE_SECURE
 from app.database import get_db
 from app.models import AuthSession, User
 from app.schemas.auth import AuthResponse, Credentials, ProfileUpdate, RegistrationCredentials
@@ -23,7 +23,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
         max_age=auth_service.SESSION_MAX_AGE_SECONDS,
         httponly=True,
         secure=SESSION_COOKIE_SECURE,
-        samesite="lax",
+        samesite=SESSION_COOKIE_SAMESITE,
         path="/",
     )
     response.headers["Cache-Control"] = "no-store"
@@ -90,7 +90,7 @@ def logout(
         path="/",
         httponly=True,
         secure=SESSION_COOKIE_SECURE,
-        samesite="lax",
+        samesite=SESSION_COOKIE_SAMESITE,
     )
     response.headers["Cache-Control"] = "no-store"
     return response

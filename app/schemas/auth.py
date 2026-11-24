@@ -55,3 +55,15 @@ class PublicUser(APIModel):
 class AuthResponse(APIModel):
     user: PublicUser
     csrf_token: str
+
+
+class GoogleAuthStatus(APIModel):
+    configured: bool
+    linked: bool
+    linked_email: str | None = None
+    has_password: bool
+    can_unlink: bool
+
+
+class GoogleLinkStartResponse(APIModel):
+    authorization_url: str

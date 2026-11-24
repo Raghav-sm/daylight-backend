@@ -17,7 +17,7 @@ class User(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -27,5 +27,8 @@ class User(Base):
         back_populates="owner", cascade="all, delete-orphan"
     )
     sessions: Mapped[list["AuthSession"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    google_identities: Mapped[list["GoogleIdentity"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

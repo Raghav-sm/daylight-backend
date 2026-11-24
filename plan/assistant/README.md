@@ -228,7 +228,9 @@ Groq uses `reasoning_format="hidden"` because its reasoning models require a com
 
 ## Part 3 — The MCP side (next phase)
 
-The same Daylight actions can later be exposed as MCP tools. That MCP work has **not** been implemented yet. In particular, we still need to choose how an external MCP client authenticates and how its verified identity maps to a Daylight user. We must do that before exposing write actions outside the app.
+The detailed execution plans are in [the MCP README](../mcp/README.md) and [the OAuth README](../oauth/README.md). They build on the actions and authenticated chat flow described above.
+
+The same Daylight actions can later be exposed as MCP tools. That MCP work has **not** been implemented yet. The chosen plan uses Daylight-issued OAuth tokens after an interactive login and consent flow, so users can connect with a URL instead of copying credentials. The identity check must be implemented before exposing write actions outside the app.
 
 ### Step 1 — Register the shared actions with FastMCP
 
@@ -247,7 +249,7 @@ def create_task(project_name: str, title: str) -> dict:
     ...
 ```
 
-The `...` is deliberate: authentication has not been chosen, so a real user resolver cannot be written safely by guessing how an external identity will be issued.
+The `...` is deliberate: Daylight's OAuth token verification and user resolver have not been implemented yet.
 
 ### Step 2 — What the external client does
 
@@ -257,7 +259,7 @@ Claude Code (or another host) owns its own model and conversation. Daylight does
 
 ### Step 3 — Mount and protect the MCP server
 
-FastMCP can provide an ASGI application that FastAPI mounts at a route such as `/mcp`. The final mount must include the selected authentication provider, lifespan handling, and deployment configuration. The code below is only the shape of that eventual integration; do not expose an unauthenticated MCP mount:
+FastMCP can provide an ASGI application that FastAPI mounts at a route such as `/mcp`. The final mount must include Daylight OAuth token verification, lifespan handling, and deployment configuration. The code below is only the shape of that eventual integration; do not expose an unauthenticated MCP mount:
 
 ```python
 mcp_app = mcp.http_app(path="/")

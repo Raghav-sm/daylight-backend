@@ -48,7 +48,7 @@ def register(db: Session, credentials: RegistrationCredentials) -> tuple[User, s
 
 def login(db: Session, credentials: Credentials) -> tuple[User, str, str]:
     user = db.scalar(select(User).where(User.email == credentials.email))
-    if user is None or not verify_password(credentials.password, user.password_hash):
+    if user is None or not user.password_hash or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email or password is incorrect")
     _, raw_token, csrf_token = _create_session(db, user)
     db.commit()

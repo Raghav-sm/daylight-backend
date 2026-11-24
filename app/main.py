@@ -1,11 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
-from app.api import assistant, auth, projects, tasks
+from app.api import assistant, auth, google_auth, oauth, projects, tasks
 from app.config import FRONTEND_ORIGINS
+from app.mcp.server import mcp
 
-app = FastAPI()
+mcp_app = mcp.http_app(path="/mcp")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp_app.lifespan(app):
+        yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(FRONTEND_ORIGINS),
@@ -15,6 +27,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(google_auth.router)
+app.include_router(oauth.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
 app.include_router(assistant.router)
@@ -36,3 +50,7 @@ def health_check():
 @app.get("/")
 def root():
     return {"message": "Hello World"}
+
+
+# Keep this catch-all mount last so ordinary FastAPI routes remain reachable.
+app.mount("/", mcp_app)
